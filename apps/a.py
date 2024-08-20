@@ -1,7 +1,7 @@
 from streamlit import session_state as stss
 
 from presenter.presenter import Presenter
-from page_manager.page_urls import page_urls
+from utils.page_manager import page_urls
 
 page_urls(__file__)
 

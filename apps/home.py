@@ -1,13 +1,12 @@
-from page_manager.page_urls import page_contents, page_urls
-from streamlit_card import card
 import streamlit as st
+from streamlit_card import card
 
-from page_manager.page_urls import PAGES
+from utils.page_manager import PAGES, page_contents, page_urls
+
 page_urls(__file__)
 
 """
-### レクチャ用ページ
-これはPythonを触ったことがない人向けにStreamlitをレクチャするためのページです。
+# テストページ
 """
 cols=st.columns(2)
 with cols[0]:

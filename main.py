@@ -1,6 +1,6 @@
 import streamlit as st
 
-from page_manager.page_urls import PAGES
+from utils.page_manager import PAGES
 
 st.set_page_config(layout="wide")
 

@@ -24,9 +24,10 @@
         - 改修が他コンポーネントに影響しにくい
     - **再利用性**
         - View/Modelの技術を変更しても他のコンポーネントはコードを再利用できる
-- 責任の分離をしすぎるとソースコード量が増えるので開発コストが高くなってしまう。
-- モック作成初期など、頻繁に大幅な変更が加わる段階では適さない。
-    - [MVP (Model-View-Presenter)](https://www.querier.io/ja/glossary/mvp)
+- デメリットは以下。
+    - 責任の分離をしすぎるとソースコード量が増えるので開発コストが高くなってしまう。
+    - モック作成初期など、頻繁に大幅な変更が加わる段階では適さない。
+        - [MVP (Model-View-Presenter)](https://www.querier.io/ja/glossary/mvp)
 
 ### 各コンポーネントの特徴
 - **Model**
@@ -42,15 +43,18 @@
 
 
 ### 本プロジェクトにおけるアーキ案
-主に、以下要素を考慮する。
+考慮すべきと思われる要素は以下。
 - Streamlitとの併用
     - Streamlitはコンパクトなコードを一か所に集中させるスタイルを想定している
     - ViewとPresenterを分離させようとするとコード量が増加する可能性がある
 - Azureの利用
     - MVPパターン採用に関わらずバックエンドは分離する予定であった。
     - マイクロサービス化に関しても特に影響はない
-各コンポーネントは以下を担当する。
+
+上記を踏まえ、各コンポーネントの関心の範囲や実装上のルールを以下のように定める。
+
 - **model**
+    - ファイル/クラスは機能単位で分割する
     - データ操作(CRUD)
     - ビジネスロジックの定義
     - 外部APIの操作の定義
@@ -58,7 +62,7 @@
     - 利用するライブラリ: `pd`, `np`, `fastapi`, `requests`, ...
         - `st`や`stss`はインポートしない
     - コード内でViewやPresenterを利用しない
-    - マイクロサービス化する場合、対象はここのみ
+    - マイクロサービス化する場合、対象はmodelのみ
 - **view**
     - ファイル: メイン + 各タブ + サイドバー
     - クラス: メイン + 各タブ + 各ダイアログボックス + サイドバー
@@ -75,13 +79,11 @@
     - アプリケーションの処理フローの定義
     - 表示における条件分岐(編集モードの切り替えなど)
     - 入力バリデーション
-    - 利用するライブラリ: `stss`, `st.rerun`, `st.dialog`
+    - 利用するライブラリ: `st.session_state`, `st.rerun`, `st.dialog`
         - `st`はインポートしない
-    - `Presenter.state` において、辞書型でセッション状態を保持する
-        - この他は状態として保持しない
-        - ※データは適宜キャッシュする
+    - 主に `Presenter.state` において、辞書型でセッション状態を保持する
     - UI要素のリフレッシュのために、`Presenter.key_number` `Presenter.count_up()` を利用する
-        - この他は状態として保持しない
+        - 上記以外は状態として保持しない
         - ※データは適宜`st.cache`でキャッシュする
     - コード内でModelやPresenterのメソッドを利用する
 - **apps**: 各アプリのエントリーポイント
@@ -110,11 +112,141 @@
 
 
 
+## 図
+まず、Model以外のコンポーネントの構成と依存関係を以下に示す。
+- `main.py`, `apps`は多少簡略化して書いている。
+- この図は`app1.py`に関する依存関係を示す。
+- `home.py`, `app2.py`は未実装であり、下図では割愛する。`app1.py`と類似の依存関係を今後実装する見込み。
+- Presenterのフォルダはアプリごとに分けてもよいかもしれない。
+
+```mermaid
+graph LR;
+
+
+Presenter --> View;
+SidebarPresenter --> SidebarView;
+PartsPresenter --> PartsView;
+PartsPresenter --> PartsXxxView;
+RegisterPresenter --> RegisterView;
+RegisterPresenter --> RegisterConfirmView;
+FilePresenter --> FileView;
+FilePresenter --> FileXxxView;
+
+main.py --> app1.py;
+app1.py --> Presenter;
+Presenter --> SidebarPresenter;
+Presenter --> PartsPresenter;
+Presenter --> RegisterPresenter;
+Presenter --> FilePresenter;
+
+subgraph apps;
+    home.py;
+    app1.py;
+    app2.py;
+end
+
+subgraph p[presenter];
+    subgraph presenter.py;
+        Presenter;
+    end
+    subgraph sidebar_presenter.py;
+        SidebarPresenter;
+    end
+    subgraph parts_presenter.py;
+        PartsPresenter;
+    end
+    subgraph file_presenter.py;
+        FilePresenter;
+    end
+    subgraph register_presenter.py;
+        RegisterPresenter;
+    end
+end
+
+subgraph v[view];
+    subgraph view.py;
+        View;
+    end
+    subgraph sidebar_view.py;
+        SidebarView;
+    end
+    subgraph parts_view.py;
+        PartsView;
+        PartsXxxView;
+    end
+    subgraph file_view.py;
+        FileView;
+        FileXxxView;
+    end
+    subgraph register_view.py;
+        RegisterView;
+        RegisterConfirmView;
+    end
+end
+```
+
+次に、modelの構成と、modelとpresenterの依存関係を以下に示す。
+- modelはpresenter以外のコンポーネントと依存関係がない。
+- modelはクラス内の関数毎で依存関係が大きく異なるため、関数のレベルまで分割して記載している。
+    - クラス自体は関数をまとめている箱のような役割しかしておらず、注目しなくてよい。
+
+
+```mermaid
+graph LR;
+
+PartsPresenter --> add_xxx_api;
+PartsPresenter --> add_yyy_api;
+
+subgraph p[presenter];
+    subgraph presenter.py;
+        Presenter;
+    end
+    subgraph sidebar_presenter.py;
+        SidebarPresenter;
+    end
+    subgraph parts_presenter.py;
+        PartsPresenter;
+    end
+    subgraph file_presenter.py;
+        FilePresenter;
+    end
+    subgraph register_presenter.py;
+        RegisterPresenter;
+    end
+end
+
+subgraph m[model];
+    subgraph parts_crud.py;
+    subgraph PartsCRUD;
+        add_yyy_api;
+        add_xxx_api;
+        edit_parts_api;
+        delete_parts_api;
+        import_parts_api;
+        parts_filter;
+    end
+    end
+    subgraph file_crud.py;
+    subgraph FileCRUD;
+        add_file_api;
+        edit_file_api;
+        delete_file_api;
+        import_file_api;
+        file_filter;
+    end
+    end
+end
+```
+
+
+
+
 ## 相談
 - MVP適用前後のコードを比較しながら説明する機会を設けたい
 - 組み合わせを選ぶUIは表２つか？縦？横？
 - アイコン+helpのUIはどうか？
 - まだ試せていないこと
+    - ポーリングの実装（フロント側の挙動確認）
     - ログイン/ログアウトの画面遷移
     - ヘッダー領域について
         - 配置すべき内容
@@ -124,7 +256,19 @@
     - Reactによるコンポーネント開発
         - アイコンの線の太さ
         - ウィジェット配置
+        - MUI
+    - キャッシュとか（よくわかっていない）
 
+## todo
+- マルチページ化
+- 命名直す
+    - files -> file
+    - app1 -> xxxx
+- チェックボックスをトグルにする
+- icon修正（emoji → material icon）
+    - cf: plumbing, package, deployed code
+- 上の図を完成させる
+    - df_configとかも整理する
 
 
 ## その他メモ
@@ -137,6 +281,7 @@
 
 ### コーディング
 - [可読性の高いコードを書くための実践ガイド](https://qiita.com/nucomiya/items/54d716729ffa47312f0d)
+- [保守性の高いソフトウェア開発のTips集](https://zenn.dev/riku/books/36d9873ee1c0e6)
 
 ### React
 - [【完全版】これ1本でReactの基本がマスターできる！初心者チュートリアル！](https://qiita.com/Sicut_study/items/d520f9a858506b81e874)
